@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, shrink-to-fit=no, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>UDEV De-Mystified</title>
+
+    <!-- Bootstrap Core CSS -->
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="css/simple-sidebar.css" rel="stylesheet">
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+
+<body>
+
+    <div id="wrapper">
+
+        <!-- Sidebar -->
+        <div id="sidebar-wrapper">
+            <ul class="sidebar-nav">
+                <li class="sidebar-brand">
+                    <a href="#">
+                        UDEV Demystified
+                    </a>
+                </li>
+                <li>
+                    <a href="#">Keyboard</a>
+                </li>
+                <li>
+                    <a href="#">Thumb Drive</a>
+                </li>
+                <li>
+                    <a href="#">Web-Cam</a>
+                </li>
+                <li>
+                    <a href="#">Digital Camera</a>
+                </li>
+                <li>
+                    <a href="#">Cell Phone</a>
+                </li>
+                <li>
+                    <a href="#">Services</a>
+                </li>
+                <li>
+                    <a href="#">Contact</a>
+                </li>
+            </ul>
+        </div>
+        <!-- /#sidebar-wrapper -->
+
+        <!-- Page Content -->
+        <div id="page-content-wrapper">
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-lg-12">
+                        <h2>UDEV & USB Keyboard</h2>
+                        
+
+<table class="table "style="width:100%">
+  <tr><th>What:</th><td>What 'really' happens when you plug in that USB keyboard in Linux ?</td></tr>  
+  <tr><th>Why: </th><td>Because 'I' could not find all the information or guidance I needed in 'one' place</td></tr>  
+  <tr><th>Who: </th><td>By a frustrated and desperate kernel hacker.</td></tr>
+  <tr><th>Where:</th><td>117 Lansdowne Ave, Toronto</td></tr>
+  <tr><th>When:</th><td>26th August 2016</td></tr> 
+</table>
+
+
+<h2>Disclaimer</h2>
+<table>
+	<tr>
+		<td>These notes are memories of a journey that I wish I never started but am glad I did ! 
+This documnet may not comply with man pages or style and 
+may come sprinkled with expletives but it is a work from 'lived-experince'
+so may help someone out there. <br>You don't like the way "I" do things ? <br>
+Good, write up a *better* more *acurate* one ? 
+Hell no ? Dat's fine too :-)</td>
+	</tr>
+</table>
+
+
+<h2>Let's Do This</h2>
+<div class="alert alert-info">
+<p>Lets first clean up the log buffer so it is easier for us to analyze:</p>
+<p>1 - Clear dmesg log : <code>sudo dmesg -c</code></p>
+<p>2 - Remove then plug in your USB keyboard</p>
+<p>3 - Run dmesg</p>
+</div>
+
+This is my demsg output below:                        
+<pre>aruna@debian:/sys/bus/hid$ dmesg
+
+[64862.403479] usb 1-6: USB disconnect, device number 18
+[64864.452755] usb 1-6: new low-speed USB device number 19 using xhci_hcd
+[64864.475055] usb 1-6: New USB device found, idVendor=046d, idProduct=c312
+[64864.475057] usb 1-6: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+[64864.475058] usb 1-6: Product: USB Multimedia Keyboard
+[64864.475059] usb 1-6: Manufacturer: LITEON Technology
+[64864.475141] usb 1-6: ep 0x81 - rounding interval to 128 microframes, ep desc says 192 microframes
+<b>[64864.477829] input: LITEON Technology USB Multimedia Keyboard as /devices/pci0000:00/0000:00:14.0/usb1/1-6/1-6:1.0/input/input18
+[64864.477898] generic-usb 0003:046D:C312.000D: input,hidraw0: USB HID v1.10 Keyboard [LITEON Technology USB Multimedia Keyboard] on usb-0000:00:14.0-6/input0</b>
+</pre><br>
+
+
+<!--<div class="alert alert-info">-->
+What we need are the last two lines that are bold faced
+<!--</div>-->
+<pre><b>[64864.477829] input: LITEON Technology USB Multimedia Keyboard as /devices/pci0000:00/0000:00:14.0/usb1/1-6/1-6:1.0/input/input18
+[64864.477898] generic-usb 0003:046D:C312.000D: input,hidraw0: USB HID v1.10 Keyboard [LITEON Technology USB Multimedia Keyboard] on usb-0000:00:14.0-6/input0</b></pre><br>
+<!--<div class="alert alert-info">-->
+But investigating the entire dmesg output is beneficial so lets do that..
+<!--</div>-->
+
+<pre>1 - [64862.403479] usb 1-6: USB disconnect, device number 18</pre><br>
+
+<table class="table" style="width:100%">
+<tr><th>usb 1-6:</th><td>is the <b>bus</b> and <b>port</b> number ( port as in usb slot on your device )</td></tr>
+<tr><th>USB disconnect:</th><td>tells us we just removed the keyboard</td></tr>
+<tr><th>device number 18:</th><td>keyboard was connected as device 18 before removal</td></tr>
+</table>
+
+ 
+<pre>2 - [64864.452755] usb 1-6: new low-speed USB device number 19 using xhci_hcd</pre>
+From the above we can break things down to this:
+<div class="alert alert-info">
+usb 1-6:is the <b>bus</b> and <b>port</b> number ( port as in usb slot on your device )<br>
+new low-speed USB device number 19<br>
+using driver xhci_hcd<br>
+second line finds the keyboard we just plugged back in and assigns a device number of 19 and uses xhci_hcd driver<br>  
+let us see if dmesg is telling us the truth that the driver being used is <b>xhci_hcd</b> by running<code>lsusb -t</code>  and we see:
+</div>
+<pre>
+aruna@debian:/media/kernel-stuff/linux-3.18.2$ lsusb -t
+/:  Bus 04.Port 1: Dev 1, Class=root_hub, Driver=ehci_hcd/2p, 480M
+    |__ Port 1: Dev 2, If 0, Class=hub, Driver=hub/6p, 480M
+/:  Bus 03.Port 1: Dev 1, Class=root_hub, Driver=ehci_hcd/2p, 480M
+    |__ Port 1: Dev 2, If 0, Class=hub, Driver=hub/4p, 480M
+/:  Bus 02.Port 1: Dev 1, Class=root_hub, Driver=xhci_hcd/2p, 5000M
+/:  Bus 01.Port 1: Dev 1, Class=root_hub, Driver=xhci_hcd/10p, 480M
+    |__ Port 1: Dev 2, If 0, Class=vend., Driver=zc3xx, 12M
+    |__ Port 1: Dev 2, If 1, Class=audio, Driver=snd-usb-audio, 12M
+    |__ Port 1: Dev 2, If 2, Class=audio, Driver=snd-usb-audio, 12M
+    <b>|__ Port 6: Dev 19, If 0, Class=HID, Driver=usbhid, 1.5M    // device 19 is our keyboard as shown by lsusb and is using driver usbhid ( why is this ? see below)</b>
+    |__ Port 8: Dev 4, If 0, Class=stor., Driver=usb-storage, 480M
+    |__ Port 9: Dev 5, If 0, Class=HID, Driver=usbhid, 1.5M
+</pre><br>
+
+<div class="alert alert-info">
+Ah ha! So dmesg LIED ? <br>
+Not so, dmesg gave us the 'root_hub' which DOES use xhci_hcd  :)<br><hr>
+
+lsusb shows us:<br>
+ 
+ - Bus 001 Device 019: ID 046d:c312 Logitech, Inc. DeLuxe 250 Keyboard   <br>
+ - which tells us our keyboard is on bus 001 has a device ID of 019 a <br><hr>
+
+And: <br>
+ - Bus 01.Port 1: Dev 1, Class=root_hub, Driver=xhci_hcd/10p, 480M  that is what dmesg showed us :) Makes sense ?<br><hr>
+  
+So from this we can on see bus 01 port1 device1 is our root_hub which uses driver xhci_hcd at 480Mbps <br>
+
+and on the same bus BUT on port 6 is our keyboard: <br><hr>
+Port 6: Dev 19, If 0, Class=HID, Driver=usbhid, 1.5M  <br></div>
+ 
+<pre> 3 - [64864.475055] usb 1-6: New USB device found, idVendor=046d, idProduct=c312</pre>3
+  - third line tells us the usb keyboard has a VendorId = 046d and ProductId = c312<br><hr>
+<div class="alert alert-info"> 
+4 - [64864.475057] usb 1-6: New USB device strings: Mfr=1, Product=2, SerialNumber=0<br><hr>
+  - Am trying to figure this out still :(<br><hr>
+  
+5 - [64864.475058] usb 1-6: Product: USB Multimedia Keyboard<br><hr>
+  - it is a usb keyboard<br><hr>
+
+6 - [64864.475059] usb 1-6: Manufacturer: LITEON Technology<br><hr>
+  - manufaturer is LITEON ( why didn't they call it RIGHT-ON?)<br><hr>
+ 
+7 -[64864.475141] usb 1-6: ep 0x81 - rounding interval to 128 microframes, ep desc says 192 microframes<br><hr>
+  - ep is a acronym for end point ( staples TODO list to my forehead, read about end points eh ) <br><hr>
+  
+8 - [64864.477829] input: LITEON Technology USB Multimedia Keyboard as /devices/pci0000:00/0000:00:14.0/usb1/1-6/1-6:1.0/input/input18<br><hr>
+  - This is what we need the device path of the keyboard so we can use udevadm and monitor  <br><hr>
+ 
+</div>
+
+lets break down that device path from line 8:
+
+PCI devices use <domain>:<bus>:<slot>.<func> also known as B/D/F meaning [domain]:Bus:Device.Function
+
+/devices
+/pci0000:00   [domain:bus]
+/0000:00:14.0 [domain:bus:device.function] // pay attention to the colon's and period :)'
+/usb1         []
+/1-6          [bus1-port6] 
+/1-6:1.0      [bus1-port6]:[device1.function0]
+/input        // this is under /dev/input 
+/input18
+
+
+
+ - let us confirm this using lsusb and we see: 
+
+aruna@debian:/media/kernel-stuff/linux-3.18.2$ lsusb 
+Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 004 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 002: ID 046d:08d7 Logitech, Inc. QuickCam Communicate STX
+Bus 001 Device 019: ID 046d:c312 Logitech, Inc. DeLuxe 250 Keyboard       // Vendor and Product Id match as shown by dmesg
+Bus 001 Device 004: ID 048d:1345 Integrated Technology Express, Inc. Multi Cardreader
+Bus 001 Device 005: ID 093a:2510 Pixart Imaging, Inc. Optical Mouse
+Bus 003 Device 002: ID 8087:8008 Intel Corp. 
+Bus 004 Device 002: ID 8087:8000 Intel Corp. 
+
+
+
+dmesg tells us the device path of the keyboard is: 
+[64864.477829] input: LITEON Technology USB Multimedia Keyboard as /devices/pci0000:00/0000:00:14.0/usb1/1-6/1-6:1.0/input/input18
+
+
+
+dmesg also tells us:
+generic-usb 0003:046D:C312.000D: input,hidraw0: USB HID v1.10 Keyboard [LITEON Technology USB Multimedia Keyboard] on usb-0000:00:14.0-6/input0
+
+lets break that line down:
+
+generic-usb         // uses the generic-usb
+0003:046D:C312.000D 
+input,hidraw0       // we should see it under /sys/input
+USB HID v1.10 Keyboard [LITEON Technology USB Multimedia Keyboard] on usb-0000:00:14.0-6/input0  
+
+if we run: ls -la /sys/bus/pci/devices this will show us all the PCI devices 
+and from demsg we know : /devices/pci0000:00/0000:00:14.0 is our keyboard so..
+
+aruna@debian:/sys/bus/usb/devices$ ls -la /sys/bus/pci/devices 
+total 0
+drwxr-xr-x 2 root root 0 Aug 26 07:35 .
+drwxr-xr-x 5 root root 0 Aug 26 07:35 ..
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:00.0 -> ../../../devices/pci0000:00/0000:00:00.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:01.0 -> ../../../devices/pci0000:00/0000:00:01.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:02.0 -> ../../../devices/pci0000:00/0000:00:02.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:03.0 -> ../../../devices/pci0000:00/0000:00:03.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:14.0 -> ../../../devices/pci0000:00/0000:00:14.0 // This is our usb keyboard
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:16.0 -> ../../../devices/pci0000:00/0000:00:16.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1a.0 -> ../../../devices/pci0000:00/0000:00:1a.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1b.0 -> ../../../devices/pci0000:00/0000:00:1b.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1c.0 -> ../../../devices/pci0000:00/0000:00:1c.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1c.2 -> ../../../devices/pci0000:00/0000:00:1c.2
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1d.0 -> ../../../devices/pci0000:00/0000:00:1d.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1f.0 -> ../../../devices/pci0000:00/0000:00:1f.0
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1f.2 -> ../../../devices/pci0000:00/0000:00:1f.2
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:00:1f.3 -> ../../../devices/pci0000:00/0000:00:1f.3
+lrwxrwxrwx 1 root root 0 Aug 26 07:35 0000:03:00.0 -> ../../../devices/pci0000:00/0000:00:1c.2/0000:03:00.0
+
+
+
+Reference:
+
+ make menuconfig->device drivers->
+ CONFIG_USB_XHCI_HCD:                                                    │  
+  │                                                                         │  
+  │ The eXtensible Host Controller Interface (xHCI) is standard for USB 3.0 │  
+  │ "SuperSpeed" host controller hardware.                                  │  
+  │                                                                         │  
+  │ To compile this driver as a module, choose M here: the                  │  
+  │ module will be called xhci-hcd.                                         │  
+  │                                                                         │  
+  │ Symbol: USB_XHCI_HCD [=y]                                               │  
+  │ Type  : tristate                                                        │  
+  │ Prompt: xHCI HCD (USB 3.0) support                                      │  
+  │   Location:                                                             │  
+  │     -> Device Drivers                                                   │  
+  │       -> USB support (USB_SUPPORT [=y])                                 │  
+  │         -> Support for Host-side USB (USB [=y])                         │  
+  │   Defined at drivers/usb/host/Kconfig:18      
+
+                        
+                        
+                        
+                        
+                        <p>This template has a responsive menu toggling system. The menu will appear collapsed on smaller screens, and will appear non-collapsed on larger screens. When toggled using the button below, the menu will appear/disappear. On small screens, the page content will be pushed off canvas.</p>
+                        <p>Make sure to keep all page content within the <code>#page-content-wrapper</code>.</p>
+                        <a href="#menu-toggle" class="btn btn-default" id="menu-toggle">Toggle Menu</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- /#page-content-wrapper -->
+
+    </div>
+    <!-- /#wrapper -->
+
+    <!-- jQuery -->
+    <script src="js/jquery.js"></script>
+
+    <!-- Bootstrap Core JavaScript -->
+    <script src="js/bootstrap.min.js"></script>
+
+    <!-- Menu Toggle Script -->
+    <script>
+    $("#menu-toggle").click(function(e) {
+        e.preventDefault();
+        $("#wrapper").toggleClass("toggled");
+    });
+    </script>
+
+</body>
+
+</html>
